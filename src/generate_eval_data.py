@@ -128,6 +128,13 @@ def generate_evaluation_dataset(questions, file_name):
                 ground_truth])
 
 if __name__ == "__main__":
+    """
+    使用方法
+    `python generate_eval_data.py input.csv output.csv`
+    
+    input.csv: question, ground_truthが入力されている
+    output.csv: 評価用ファイル（question, response, context, ground_truth）
+    """
     csv_file_path = sys.argv[1]
     output_file = sys.argv[2]
     

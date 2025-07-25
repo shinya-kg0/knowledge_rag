@@ -73,8 +73,16 @@ def index_docs(chunks: list):
     for i, chunk in enumerate(chunks):
         print(f"{i+1}個目のチャンクを処理中...")
         
+        full_text = f"""
+        {chunk.metadata.get("Header 1", "")}
+        {chunk.metadata.get("Header 2", "")}
+        {chunk.metadata.get("Header 3", "")}
+
+        {chunk.page_content}
+        """
+        
         response = openai_client.embeddings.create(
-            input=chunk.page_content,
+            input=full_text,
             model=AOAI_EMBEDDING_MODEL_NAME
         )
         
