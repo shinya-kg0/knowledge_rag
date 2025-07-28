@@ -28,7 +28,7 @@ system_message_chat_conversation = """
 """
 
 Settings.llm = AzureOpenAI(
-    model="4o-mini",
+    model="gpt-4o-mini",
     deployment_name=AOAI_CHAT_MODEL_NAME,
     api_key=AOAI_API_KEY,
     azure_endpoint=AOAI_ENDPOINT,
