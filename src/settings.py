@@ -35,11 +35,3 @@ Settings.llm = AzureOpenAI(
     api_version=AOAI_API_VERSION,
     system_prompt=system_message_chat_conversation
 )
-
-Settings.embed_model = AzureOpenAIEmbedding(
-    model="text-embedding-ada-002",
-    deployment_name=AOAI_EMBEDDING_MODEL_NAME,
-    api_key=AOAI_API_KEY,
-    azure_endpoint=AOAI_ENDPOINT,
-    api_version=AOAI_API_VERSION,
-)
