@@ -1,144 +1,126 @@
 import os
 import sys
 import csv
+import settings
+from llama_index.core import VectorStoreIndex, Settings
+from llama_index.core.prompts import PromptTemplate
+from llama_index.llms.azure_openai import AzureOpenAI
+from llama_index.embeddings.azure_openai import AzureOpenAIEmbedding
+from llama_index.vector_stores.azureaisearch import AzureAISearchVectorStore
 from azure.search.documents import SearchClient
-from openai import AzureOpenAI
+from azure.search.documents.aio import SearchClient as AsyncSearchClient
 from azure.core.credentials import AzureKeyCredential
-from azure.search.documents.models import VectorizedQuery
-from dotenv import load_dotenv
 
-# 環境変数を読み込む
-load_dotenv(verbose=True)
+# ====== LlamaIndex 設定 ======
 
-# 環境変数から接続情報を取得
-SEARCH_SERVICE_ENDPOINT = os.environ.get("SEARCH_SERVICE_ENDPOINT")
-SEARCH_SERVICE_API_KEY = os.environ.get("SEARCH_SERVICE_API_KEY")
-SEARCH_SERVICE_INDEX_NAME = os.environ.get("SEARCH_SERVICE_INDEX_NAME")
-AOAI_ENDPOINT = os.environ.get("AOAI_ENDPOINT") 
-AOAI_API_VERSION = os.environ.get("AOAI_API_VERSION") 
-AOAI_API_KEY = os.environ.get("AOAI_API_KEY") 
-AOAI_EMBEDDING_MODEL_NAME = os.environ.get("AOAI_EMBEDDING_MODEL_NAME")
-AOAI_CHAT_MODEL_NAME = os.environ.get("AOAI_CHAT_MODEL_NAME")
-
-# AIのキャラクターを決めるためのシステムメッセージを定義する。
+# System Prompt
 system_message_chat_conversation = """
 あなたはユーザーの質問に回答するチャットボットです。
-回答については、「Sources:」以下に記載されている内容に基づいて回答してください。回答は簡潔にしてください。
-「Sources:」に記載されている情報以外の回答はしないでください。
-情報が複数ある場合は「Sources:」のあとに[Source1]、[Source2]、[Source3]のように記載されますので、それに基づいて回答してください。
-また、ユーザーの質問に対して、Sources:以下に記載されている内容に基づいて適切な回答ができない場合は、「すみません。わかりません。」と回答してください。
-回答の中に情報源の提示は含めないでください。例えば、回答の中に「[Source1]」や「Sources:」という形で情報源を示すことはしないでください。
+以下のコンテキストを参考に、簡潔かつ正確に回答してください。
+Sourcesに記載がない場合は「すみません、わかりません」と答えてください。
+回答には情報源を表示しないでください。
+
+コンテキスト:
+{context_str}
+
+質問:
+{query_str}
 """
 
-# ユーザーの質問に対して回答する関数
-# 引数はチャットの履歴（JSON配列）
-def search(history: list[dict]):
-    """
-    [{'role': 'user', 'content': '有給は何日取れますか？'},{'role': 'assistant', 'content': '10日です'},
-    {'role': 'user', 'content': '一日の労働上限時間は？'}...]というJSON配列から
-    最も末尾に格納されているJSONオブジェクトのcontent(=ユーザーの質問)を取得する。
-    """
-    question = history[-1].get("content")
-    
-    # それぞれのクライアントを作成
-    search_client = SearchClient(
-        endpoint=SEARCH_SERVICE_ENDPOINT,
-        index_name=SEARCH_SERVICE_INDEX_NAME,
-        credential=AzureKeyCredential(SEARCH_SERVICE_API_KEY)
-    )
-    openai_client = AzureOpenAI(
-        azure_endpoint=AOAI_ENDPOINT,
-        api_key=AOAI_API_KEY,
-        api_version=AOAI_API_VERSION
-    )
-    
-    # ユーザーの質問をベクトル化する
-    response = openai_client.embeddings.create(
-        input=question,
-        model=AOAI_EMBEDDING_MODEL_NAME
-    )
-    
-    # AI Searchで検索できるようにクエリを生成
-    vector_query = VectorizedQuery(
-        vector=response.data[0].embedding,
-        k_nearest_neighbors=3,
-        fields="contentVector"
-    )
-    
-    # AI Searchに対してベクトル検索を行う
-    results = search_client.search(
-        vector_queries=[vector_query],
-        select=["id", "content"])
-    
-    messages = []
-    
-    # 先頭にキャラ付けのシステムメッセージを追加する
-    messages.insert(0, {"role": "system", "content": system_message_chat_conversation})
-    
-    sources = ["[Source" + result["id"] + "]: " + result["content"] for result in results]
-    source = "\n".join(sources)
-    
-    user_message = """
-    {query}
-    
-    Sources:
-    {source}
-    """.format(query=question, source=source)
-    
-    messages.append({"role": "user", "content": user_message})
-    
-    # 回答を生成させる
-    response = openai_client.chat.completions.create(
-        model=AOAI_CHAT_MODEL_NAME,
-        messages=messages
-    )
-    answer = response.choices[0].message.content
-    
-    return answer, source
+Settings.llm = AzureOpenAI(
+    model="gpt-4o",
+    deployment_name=settings.AOAI_CHAT_MODEL_NAME,
+    api_key=settings.AOAI_API_KEY,
+    azure_endpoint=settings.AOAI_ENDPOINT,
+    api_version=settings.AOAI_API_VERSION,
+)
 
-# ユーザーの質問を読み込むための関数を定義する
-def load_questions(filepath):
-    questions = []
+Settings.embed_model = AzureOpenAIEmbedding(
+    model="text-embedding-ada-002",
+    deployment_name=settings.AOAI_EMBEDDING_MODEL_NAME,
+    api_key=settings.AOAI_API_KEY,
+    azure_endpoint=settings.AOAI_ENDPOINT,
+    api_version=settings.AOAI_API_VERSION,
+)
+
+# Azure Search 接続
+search_client = SearchClient(
+    endpoint=settings.SEARCH_SERVICE_ENDPOINT,
+    index_name=settings.SEARCH_SERVICE_INDEX_NAME,
+    credential=AzureKeyCredential(settings.SEARCH_SERVICE_API_KEY)
+)
+async_search_client = AsyncSearchClient(
+    endpoint=settings.SEARCH_SERVICE_ENDPOINT,
+    index_name=settings.SEARCH_SERVICE_INDEX_NAME,
+    credential=AzureKeyCredential(settings.SEARCH_SERVICE_API_KEY),
+)
+
+# VectorStore 設定
+vector_store = AzureAISearchVectorStore(
+    search_or_index_client=search_client,
+    async_search_or_index_client=async_search_client,
+    id_field_key="id",
+    chunk_field_key="content",
+    embedding_field_key="contentVector",
+    metadata_string_field_key="metadata_json",
+    doc_id_field_key="doc_id"
+)
+
+# Index + QueryEngine 準備
+index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
+qa_template = PromptTemplate(system_message_chat_conversation, prompt_type="text_qa")
+query_engine = index.as_query_engine(similarity_top_k=3, text_qa_template=qa_template)
+
+# ====== 評価データ生成関数 ======
+
+def search(question: str):
+    """LlamaIndex QueryEngineを使って質問に回答"""
+    response = query_engine.query(question)
+    answer_text = response.response if hasattr(response, "response") else str(response)
     
+    # コンテキスト（Sources）をまとめる
+    sources = [node.node.get_content() for node in getattr(response, "source_nodes", [])]
+    context_text = " ".join(sources)
+    
+    return answer_text, context_text
+
+
+def load_questions(filepath):
+    """CSVから質問と正解データをロード"""
+    questions = []
     with open(filepath, mode="r", encoding="utf-8") as file:
-        # csvを辞書形式で読み込む
         reader = csv.DictReader(file)
-        # 各行の"question", "ground_truth"列の値をリストに追加していく
         for row in reader:
             questions.append((row["question"], row["ground_truth"]))
-    
     return questions
 
+
 def generate_evaluation_dataset(questions, file_name):
-    # evaluation_dataset.csvというファイルを新規作成または上書きして開く
+    """質問と回答を評価用CSVに出力"""
     with open(file_name, mode="w", newline="", encoding="utf-8") as f:
-        # CSVライターを作成、すべての項目をダブルクオーテーションで囲む
         writer = csv.writer(f, quoting=csv.QUOTE_ALL)
         writer.writerow(["query", "response", "context", "ground_truth"])
         
-        # 質問ごとに処理
         for question, ground_truth in questions:
-            history = [{"role": "user", "content": question}]
-            response, context = search(history)
-
-            writer.writerow(
-                [question, 
+            response, context = search(question)
+            writer.writerow([
+                question, 
                 response.replace("\n", " "), 
-                " ".join(context).replace("\n", ""), 
-                ground_truth])
+                context.replace("\n", " "), 
+                ground_truth
+            ])
+
+# ====== 実行部分 ======
 
 if __name__ == "__main__":
     """
-    使用方法
-    `python generate_eval_data.py input.csv output.csv`
-    
-    input.csv: question, ground_truthが入力されている
-    output.csv: 評価用ファイル（question, response, context, ground_truth）
+    使用方法:
+    python generate_eval_data.py input.csv output.csv
+    input.csv: question, ground_truthが列に含まれる
+    output.csv: query, response, context, ground_truthが出力される
     """
     csv_file_path = sys.argv[1]
     output_file = sys.argv[2]
     
     questions = load_questions(csv_file_path)
-    
     generate_evaluation_dataset(questions, output_file)
-            

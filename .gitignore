@@ -2,3 +2,5 @@
 /eval
 /src/.env
 /data
+*.json
+__pycache__

@@ -1,0 +1,15 @@
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+SEARCH_SERVICE_ENDPOINT = os.environ.get("SEARCH_SERVICE_ENDPOINT")
+SEARCH_SERVICE_API_KEY = os.environ.get("SEARCH_SERVICE_API_KEY")
+SEARCH_SERVICE_INDEX_NAME = os.environ.get("SEARCH_SERVICE_INDEX_NAME")
+AOAI_ENDPOINT=os.environ.get("AOAI_ENDPOINT")
+AOAI_API_VERSION = os.environ.get("AOAI_API_VERSION") 
+AOAI_API_KEY = os.environ.get("AOAI_API_KEY") 
+AOAI_CHAT_MODEL_NAME = os.environ.get("AOAI_CHAT_MODEL_NAME")
+AOAI_EMBEDDING_MODEL_NAME = os.environ.get("AOAI_EMBEDDING_MODEL_NAME")
+

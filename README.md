@@ -17,7 +17,7 @@ streamlitでGUIを起動すると自分が学んだことをもとに回答を�
 | フレームワーク | Streamlit                |
 | LLM API        | Azure OpenAI (GPT + Embedding) |
 | 検索エンジン   | Azure AI Search          |
-| 分割ライブラリ | LangChain（MarkdownHeaderTextSplitter）|
+| 分割ライブラリ | LlamaIndex（MarkdownNodeParser）|
 | その他         | dotenv, glob, OpenAI SDK |
 
 
